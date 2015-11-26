@@ -1,0 +1,263 @@
+diff -u -r iperf-2.0.5/include/headers.h iperf-2.0.5_orig/include/headers.h
+--- iperf-2.0.5/include/headers.h	2015-11-26 12:35:49.772080948 -0800
++++ iperf-2.0.5_orig/include/headers.h	2008-03-12 13:28:21.000000000 -0700
+@@ -186,7 +186,6 @@
+ #include "gettimeofday.h"
+ #include "inet_aton.h"
+ #include "snprintf.h"
+-#include <net/if.h>
+ 
+ #ifndef SHUT_RD
+     #define SHUT_RD   0
+diff -u -r iperf-2.0.5/include/Locale.h iperf-2.0.5_orig/include/Locale.h
+--- iperf-2.0.5/include/Locale.h	2015-11-26 12:35:49.772080948 -0800
++++ iperf-2.0.5_orig/include/Locale.h	2010-03-30 15:57:17.000000000 -0700
+@@ -80,8 +80,6 @@
+ 
+ extern const char bind_address[];
+ 
+-extern const char bind_interface[];
+-
+ extern const char multicast_ttl[];
+ 
+ extern const char join_multicast[];
+diff -u -r iperf-2.0.5/include/Reporter.h iperf-2.0.5_orig/include/Reporter.h
+--- iperf-2.0.5/include/Reporter.h	2015-11-26 12:35:49.772080948 -0800
++++ iperf-2.0.5_orig/include/Reporter.h	2008-03-12 13:28:21.000000000 -0700
+@@ -118,7 +118,6 @@
+ typedef struct ReporterData {
+     char*  mHost;                   // -c
+     char*  mLocalhost;              // -B
+-    char*  mLocalInterface;         // -E
+     // int's
+     int type;
+     int cntError;
+diff -u -r iperf-2.0.5/include/Settings.hpp iperf-2.0.5_orig/include/Settings.hpp
+--- iperf-2.0.5/include/Settings.hpp	2015-11-26 12:33:53.616081657 -0800
++++ iperf-2.0.5_orig/include/Settings.hpp	2008-03-19 15:23:26.000000000 -0700
+@@ -111,7 +111,6 @@
+     char*  mFileName;               // -F
+     char*  mHost;                   // -c
+     char*  mLocalhost;              // -B
+-    char*  mLocalInterface;         // -E
+     char*  mOutputFileName;         // -o
+     FILE*  Extractor_file;
+     ReportHeader*  reporthdr;
+diff -u -r iperf-2.0.5/src/Client.cpp iperf-2.0.5_orig/src/Client.cpp
+--- iperf-2.0.5/src/Client.cpp	2015-11-26 12:27:58.460083827 -0800
++++ iperf-2.0.5_orig/src/Client.cpp	2010-04-01 13:23:17.000000000 -0700
+@@ -399,11 +399,10 @@
+     mSettings->mSock = socket( domain, type, 0 );
+     WARN_errno( mSettings->mSock == INVALID_SOCKET, "socket" );
+ 
+-    SockAddr_localAddr( mSettings );
+-
+     SetSocketOptions( mSettings );
+ 
+ 
++    SockAddr_localAddr( mSettings );
+     if ( mSettings->mLocalhost != NULL ) {
+         // bind socket to local address
+         rc = bind( mSettings->mSock, (sockaddr*) &mSettings->local, 
+@@ -411,13 +410,6 @@
+         WARN_errno( rc == SOCKET_ERROR, "bind" );
+     }
+ 
+-    if ( mSettings->mLocalInterface != NULL ) {
+-        // bind socket to local interface
+-        rc = setsockopt(mSettings->mSock, SOL_SOCKET, SO_BINDTODEVICE,
+-                        mSettings->mLocalInterface, strlen(mSettings->mLocalInterface));
+-        WARN_errno( rc == SOCKET_ERROR, "Bind Interface" );
+-    }
+-
+     // connect socket
+     rc = connect( mSettings->mSock, (sockaddr*) &mSettings->peer, 
+                   SockAddr_get_sizeof_sockaddr( &mSettings->peer ));
+diff -u -r iperf-2.0.5/src/Listener.cpp iperf-2.0.5_orig/src/Listener.cpp
+--- iperf-2.0.5/src/Listener.cpp	2015-11-26 12:26:22.504084413 -0800
++++ iperf-2.0.5_orig/src/Listener.cpp	2007-08-29 14:57:27.000000000 -0700
+@@ -371,16 +371,11 @@
+ #ifdef HAVE_IPV6_MULTICAST
+       else {
+         struct ipv6_mreq mreq;
+-        unsigned int ifindex = 0;
+-
+-        if(mSettings->mLocalInterface) {
+-            ifindex = if_nametoindex(mSettings->mLocalInterface);
+-        }
+ 
+         memcpy( &mreq.ipv6mr_multiaddr, SockAddr_get_in6_addr( &mSettings->local ), 
+                 sizeof(mreq.ipv6mr_multiaddr));
+ 
+-        mreq.ipv6mr_interface = ifindex;
++        mreq.ipv6mr_interface = 0;
+ 
+         int rc = setsockopt( mSettings->mSock, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP,
+                              (char*) &mreq, sizeof(mreq));
+diff -u -r iperf-2.0.5/src/Locale.c iperf-2.0.5_orig/src/Locale.c
+--- iperf-2.0.5/src/Locale.c	2015-11-26 12:26:23.500084407 -0800
++++ iperf-2.0.5_orig/src/Locale.c	2010-03-30 15:57:17.000000000 -0700
+@@ -85,7 +85,6 @@
+   -u, --udp                use UDP rather than TCP\n\
+   -w, --window    #[KM]    TCP window size (socket buffer size)\n\
+   -B, --bind      <host>   bind to <host>, an interface or multicast address\n\
+-  -E, --interface <dev>    bind to <dev>,  an interface or multicast address\n\
+   -C, --compatibility      for use with older versions does not sent extra msgs\n\
+   -M, --mss       #        set TCP maximum segment size (MTU - 40 bytes)\n\
+   -N, --nodelay            set TCP no delay, disabling Nagle's Algorithm\n\
+@@ -159,9 +158,6 @@
+ const char bind_address[] =
+ "Binding to local address %s\n";
+ 
+-const char bind_interface[] =
+-"Binding to local interface %s\n";
+-
+ const char multicast_ttl[] =
+ "Setting multicast TTL to %d\n";
+ 
+diff -u -r iperf-2.0.5/src/ReportDefault.c iperf-2.0.5_orig/src/ReportDefault.c
+--- iperf-2.0.5/src/ReportDefault.c	2015-11-26 12:26:23.808084405 -0800
++++ iperf-2.0.5_orig/src/ReportDefault.c	2010-03-30 15:57:17.000000000 -0700
+@@ -176,9 +176,6 @@
+             printf( join_multicast, data->mLocalhost );
+         }
+     }
+-    if ( data->mLocalInterface != NULL ) {
+-        printf( bind_interface, data->mLocalInterface );
+-    }
+ 
+     if ( isUDP( data ) ) {
+         printf( (data->mThreadMode == kMode_Listener ? 
+diff -u -r iperf-2.0.5/src/Reporter.c iperf-2.0.5_orig/src/Reporter.c
+--- iperf-2.0.5/src/Reporter.c	2015-11-26 12:26:24.080084403 -0800
++++ iperf-2.0.5_orig/src/Reporter.c	2010-03-30 16:08:24.000000000 -0700
+@@ -154,7 +154,6 @@
+                 }
+                 data->mHost = agent->mHost;
+                 data->mLocalhost = agent->mLocalhost;
+-                data->mLocalInterface = agent->mLocalInterface;
+                 data->mBufLen = agent->mBufLen;
+                 data->mMSS = agent->mMSS;
+                 data->mTCPWin = agent->mTCPWin;
+@@ -236,7 +235,6 @@
+             }
+             data->mHost = agent->mHost;
+             data->mLocalhost = agent->mLocalhost;
+-            data->mLocalInterface = agent->mLocalInterface;
+             data->mBufLen = agent->mBufLen;
+             data->mMSS = agent->mMSS;
+             data->mTCPWin = agent->mTCPWin;
+@@ -440,7 +438,6 @@
+         
+             data->mHost = agent->mHost;
+             data->mLocalhost = agent->mLocalhost;
+-            data->mLocalInterface = agent->mLocalInterface;
+             data->mode = agent->mReportMode;
+             data->type = SETTINGS_REPORT;
+             data->mBufLen = agent->mBufLen;
+diff -u -r iperf-2.0.5/src/Settings.cpp iperf-2.0.5_orig/src/Settings.cpp
+--- iperf-2.0.5/src/Settings.cpp	2015-11-26 12:26:24.324084402 -0800
++++ iperf-2.0.5_orig/src/Settings.cpp	2010-07-08 18:05:46.000000000 -0700
+@@ -106,7 +106,6 @@
+ 
+ // more esoteric options
+ {"bind",       required_argument, NULL, 'B'},
+-{"interface",  required_argument, NULL, 'E'},
+ {"compatibility",    no_argument, NULL, 'C'},
+ {"daemon",           no_argument, NULL, 'D'},
+ {"file_input", required_argument, NULL, 'F'},
+@@ -170,7 +169,7 @@
+ 
+ #define SHORT_OPTIONS()
+ 
+-const char short_options[] = "1b:c:df:hi:l:mn:o:p:rst:uvw:x:y:B:E:CDF:IL:M:NP:RS:T:UVWZ:";
++const char short_options[] = "1b:c:df:hi:l:mn:o:p:rst:uvw:x:y:B:CDF:IL:M:NP:RS:T:UVWZ:";
+ 
+ /* -------------------------------------------------------------------
+  * defaults
+@@ -250,10 +249,6 @@
+         (*into)->mLocalhost = new char[ strlen(from->mLocalhost) + 1];
+         strcpy( (*into)->mLocalhost, from->mLocalhost );
+     }
+-    if ( from->mLocalInterface != NULL ) {
+-        (*into)->mLocalInterface = new char[ strlen(from->mLocalInterface) + 1];
+-        strcpy( (*into)->mLocalInterface, from->mLocalInterface );
+-    }
+     if ( from->mFileName != NULL ) {
+         (*into)->mFileName = new char[ strlen(from->mFileName) + 1];
+         strcpy( (*into)->mFileName, from->mFileName );
+@@ -271,7 +266,6 @@
+ void Settings_Destroy( thread_Settings *mSettings) {
+     DELETE_ARRAY( mSettings->mHost      );
+     DELETE_ARRAY( mSettings->mLocalhost );
+-    DELETE_ARRAY( mSettings->mLocalInterface );
+     DELETE_ARRAY( mSettings->mFileName  );
+     DELETE_ARRAY( mSettings->mOutputFileName );
+     DELETE_PTR( mSettings );
+@@ -556,11 +550,6 @@
+             }
+             break;
+ 
+-        case 'E': // specify bind address
+-            mExtSettings->mLocalInterface = new char[ strlen( optarg ) + 1 ];
+-            strcpy( mExtSettings->mLocalInterface, optarg );
+-            break;
+-
+         case 'C': // Run in Compatibility Mode
+             setCompat( mExtSettings );
+             if ( mExtSettings->mMode != kTest_Normal ) {
+@@ -731,7 +720,6 @@
+         (*listener)->mFileName   = NULL;
+         (*listener)->mHost       = NULL;
+         (*listener)->mLocalhost  = NULL;
+-        (*listener)->mLocalInterface  = NULL;
+         (*listener)->mOutputFileName = NULL;
+         (*listener)->mMode       = kTest_Normal;
+         (*listener)->mThreadMode = kMode_Listener;
+@@ -743,10 +731,6 @@
+             (*listener)->mLocalhost = new char[strlen( client->mLocalhost ) + 1];
+             strcpy( (*listener)->mLocalhost, client->mLocalhost );
+         }
+-        if ( client->mLocalInterface != NULL ) {
+-            (*listener)->mLocalInterface = new char[strlen( client->mLocalInterface ) + 1];
+-            strcpy( (*listener)->mLocalInterface, client->mLocalInterface );
+-        }
+     } else {
+         *listener = NULL;
+     }
+@@ -795,7 +779,6 @@
+         (*client)->mFileName   = NULL;
+         (*client)->mHost       = NULL;
+         (*client)->mLocalhost  = NULL;
+-        (*client)->mLocalInterface  = NULL;
+         (*client)->mOutputFileName = NULL;
+         (*client)->mMode       = ((flags & RUN_NOW) == 0 ?
+                                    kTest_TradeOff : kTest_DualTest);
+@@ -804,10 +787,6 @@
+             (*client)->mLocalhost = new char[strlen( server->mLocalhost ) + 1];
+             strcpy( (*client)->mLocalhost, server->mLocalhost );
+         }
+-        if ( server->mLocalInterface != NULL ) {
+-            (*client)->mLocalInterface = new char[strlen( server->mLocalInterface ) + 1];
+-            strcpy( (*client)->mLocalInterface, server->mLocalInterface );
+-        }
+         (*client)->mHost = new char[REPORT_ADDRLEN];
+         if ( ((sockaddr*)&server->peer)->sa_family == AF_INET ) {
+             inet_ntop( AF_INET, &((sockaddr_in*)&server->peer)->sin_addr, 
+diff -u -r iperf-2.0.5/src/SocketAddr.c iperf-2.0.5_orig/src/SocketAddr.c
+--- iperf-2.0.5/src/SocketAddr.c	2015-11-26 12:26:24.572084400 -0800
++++ iperf-2.0.5_orig/src/SocketAddr.c	2007-08-29 14:57:27.000000000 -0700
+@@ -118,13 +118,6 @@
+         inSettings->size_local = sizeof( struct sockaddr_in );
+ #endif
+     SockAddr_setPort( &inSettings->local, inSettings->mPort );
+-
+-    if ( inSettings->mLocalInterface != NULL ) {
+-        // bind socket to local interface
+-        setsockopt(inSettings->mSock, SOL_SOCKET, SO_BINDTODEVICE,
+-                inSettings->mLocalInterface, strlen(inSettings->mLocalInterface));
+-    }
+-
+ }
+ // end SocketAddr
+ 
