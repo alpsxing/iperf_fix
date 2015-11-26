@@ -186,6 +186,7 @@ typedef uint64_t max_size_t;
 #include "gettimeofday.h"
 #include "inet_aton.h"
 #include "snprintf.h"
+#include <net/if.h>
 
 #ifndef SHUT_RD
     #define SHUT_RD   0

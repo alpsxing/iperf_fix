@@ -80,6 +80,8 @@ extern const char client_port[];
 
 extern const char bind_address[];
 
+extern const char bind_interface[];
+
 extern const char multicast_ttl[];
 
 extern const char join_multicast[];

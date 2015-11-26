@@ -118,6 +118,7 @@ typedef struct Connection_Info {
 typedef struct ReporterData {
     char*  mHost;                   // -c
     char*  mLocalhost;              // -B
+    char*  mLocalInterface;         // -E
     // int's
     int type;
     int cntError;
