@@ -111,6 +111,7 @@ typedef struct thread_Settings {
     char*  mFileName;               // -F
     char*  mHost;                   // -c
     char*  mLocalhost;              // -B
+    char*  mLocalInterface;         // -E
     char*  mOutputFileName;         // -o
     FILE*  Extractor_file;
     ReportHeader*  reporthdr;
